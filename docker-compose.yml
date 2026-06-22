@@ -1,0 +1,36 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: order-processing-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  app:
+    build: .
+    container_name: order-processing-app
+    ports:
+      - "${APP_HOST_PORT:-8080}:8080"
+    environment:
+      PORT: "8080"
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: order_processing
+      STATUS_UPDATE_INTERVAL: 5s
+      PENDING_PROCESS_DELAY: 10s
+      JWT_SECRET: change-me-in-production
+      AUTH_USERNAME: admin
+      AUTH_PASSWORD: admin
+      JWT_EXPIRY: 24h
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongo_data:
