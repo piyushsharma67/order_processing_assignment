@@ -1,13 +1,13 @@
 # Order Processing System
 
-A Go e-commerce order processing app with a web UI, REST API, JWT auth, and MongoDB persistence. Customers browse a product catalog, place orders, track status, and cancel pending orders. A background worker moves orders from `PENDING` to `PROCESSING` 10 seconds after they are placed.
+A Go e-commerce order processing app with a web UI, REST API, JWT auth, and MongoDB persistence. Customers browse a product catalog, place orders, track status, and cancel pending orders. A background worker moves orders from `PENDING` to `PROCESSING` 5 minutes after they are placed.
 
 ## Features
 
 - **Web UI** — shop catalog, cart, place orders, view orders with live status updates
 - **REST API** — create, get, list, update status, and cancel orders
 - **Authentication** — sign in / sign up with JWT
-- **Background job** — auto-updates `PENDING` → `PROCESSING` after a 10-second delay
+- **Background job** — auto-updates `PENDING` → `PROCESSING` after a 5-minute delay
 - **MongoDB** — orders, users, and products stored in MongoDB when run via Docker
 
 ## Project Structure
@@ -81,7 +81,7 @@ curl http://localhost:8081/health
 | `APP_HOST_PORT` | `8080` | Host port mapped to the app (use `8081` as shown above) |
 | `AUTH_USERNAME` | `admin` | Default admin username |
 | `AUTH_PASSWORD` | `admin` | Default admin password |
-| `PENDING_PROCESS_DELAY` | `10s` | Wait before PENDING → PROCESSING |
+| `PENDING_PROCESS_DELAY` | `5m` | Wait before PENDING → PROCESSING |
 | `STATUS_UPDATE_INTERVAL` | `5s` | Background job poll interval |
 | `MONGODB_URI` | `mongodb://mongodb:27017` | MongoDB connection (Docker) |
 | `JWT_SECRET` | `change-me-in-production` | JWT signing secret |
@@ -91,7 +91,7 @@ curl http://localhost:8081/health
 | Status | Description |
 |--------|-------------|
 | `PENDING` | Order just placed; can be cancelled |
-| `PROCESSING` | Set automatically ~10 seconds after placement |
+| `PROCESSING` | Set automatically ~5 minutes after placement |
 | `SHIPPED` | Updated via API |
 | `DELIVERED` | Updated via API |
 | `CANCELLED` | Cancelled while pending |

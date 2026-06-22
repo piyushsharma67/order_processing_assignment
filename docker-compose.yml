@@ -23,7 +23,7 @@ services:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DATABASE: order_processing
       STATUS_UPDATE_INTERVAL: 5s
-      PENDING_PROCESS_DELAY: 10s
+      PENDING_PROCESS_DELAY: 5m
       JWT_SECRET: change-me-in-production
       AUTH_USERNAME: admin
       AUTH_PASSWORD: admin

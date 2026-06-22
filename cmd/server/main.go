@@ -20,7 +20,7 @@ import (
 func main() {
 	addr := envOrDefault("PORT", "8080")
 	interval := envDurationOrDefault("STATUS_UPDATE_INTERVAL", 5*time.Second)
-	pendingDelay := envDurationOrDefault("PENDING_PROCESS_DELAY", 10*time.Second)
+	pendingDelay := envDurationOrDefault("PENDING_PROCESS_DELAY", 5*time.Minute)
 
 	ctx := context.Background()
 	repo, err := newOrderRepository(ctx)
