@@ -1,157 +1,155 @@
 # Order Processing System
 
-A Go backend for an e-commerce order processing system. Customers can place orders with multiple items, track status, list orders, and cancel pending orders. A background worker automatically moves `PENDING` orders to `PROCESSING` every 5 minutes.
+A Go e-commerce order processing app with a web UI, REST API, JWT auth, and MongoDB persistence. Customers browse a product catalog, place orders, track status, and cancel pending orders. A background worker moves orders from `PENDING` to `PROCESSING` 10 seconds after they are placed.
 
 ## Features
 
-- **Create order** — place an order with multiple line items
-- **Get order** — fetch order details by ID
-- **List orders** — retrieve all orders, optionally filtered by status
-- **Update status** — transition orders through `PENDING` → `PROCESSING` → `SHIPPED` → `DELIVERED`
-- **Cancel order** — allowed only while status is `PENDING`
-- **Background job** — auto-updates all `PENDING` orders to `PROCESSING` every 5 minutes
+- **Web UI** — shop catalog, cart, place orders, view orders with live status updates
+- **REST API** — create, get, list, update status, and cancel orders
+- **Authentication** — sign in / sign up with JWT
+- **Background job** — auto-updates `PENDING` → `PROCESSING` after a 10-second delay
+- **MongoDB** — orders, users, and products stored in MongoDB when run via Docker
 
 ## Project Structure
 
 ```
 cmd/server/              # Application entry point
 internal/domain/         # Order models, status rules, validation
-internal/repository/     # In-memory persistence layer
+internal/repository/     # In-memory and MongoDB persistence
 internal/service/        # Business logic
 internal/handler/        # HTTP handlers and routing
 internal/worker/         # Background status updater
+web/                     # Web UI (HTML/CSS/JS)
 ```
 
 ## Requirements
 
-- Go 1.22+
+- Docker and Docker Compose (recommended)
+- Go 1.22+ (optional, for local development without Docker)
 
-## Quick Start
+## How to Run
+
+From the project root:
 
 ```bash
-# Download dependencies
-go mod tidy
-
-# Run tests
-go test ./...
-
-# Start the server (default port 8080)
-go run ./cmd/server
+APP_HOST_PORT=8081 docker compose up --build
 ```
 
-### Environment Variables
+To run in the background:
+
+```bash
+APP_HOST_PORT=8081 docker compose up --build -d
+```
+
+To stop:
+
+```bash
+docker compose down
+```
+
+## Web UI
+
+Open in your browser:
+
+**http://localhost:8081/**
+
+### Login credentials
+
+| Username | Password |
+|----------|----------|
+| `admin`    | `admin`    |
+
+You can also create a new account from the **Create account** tab on the login page.
+
+### Using the UI
+
+1. Sign in with `admin` / `admin`
+2. **Shop** — add products to cart and place an order
+3. **My orders** — view orders; status updates automatically every few seconds
+4. Cancel an order while it is still **PENDING**
+
+## Health Check
+
+```bash
+curl http://localhost:8081/health
+```
+
+## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `8080` | HTTP server port |
-| `STATUS_UPDATE_INTERVAL` | `5m` | Background job interval (e.g. `30s` for testing) |
+| `APP_HOST_PORT` | `8080` | Host port mapped to the app (use `8081` as shown above) |
+| `AUTH_USERNAME` | `admin` | Default admin username |
+| `AUTH_PASSWORD` | `admin` | Default admin password |
+| `PENDING_PROCESS_DELAY` | `10s` | Wait before PENDING → PROCESSING |
+| `STATUS_UPDATE_INTERVAL` | `5s` | Background job poll interval |
+| `MONGODB_URI` | `mongodb://mongodb:27017` | MongoDB connection (Docker) |
+| `JWT_SECRET` | `change-me-in-production` | JWT signing secret |
+
+## Order Status Flow
+
+| Status | Description |
+|--------|-------------|
+| `PENDING` | Order just placed; can be cancelled |
+| `PROCESSING` | Set automatically ~10 seconds after placement |
+| `SHIPPED` | Updated via API |
+| `DELIVERED` | Updated via API |
+| `CANCELLED` | Cancelled while pending |
+
+## Run Locally (without Docker)
+
+```bash
+go mod tidy
+go test ./...
+go run ./cmd/server
+```
+
+Default URL: **http://localhost:8080/** (uses in-memory storage unless `MONGODB_URI` is set)
 
 ## API Reference
 
-### Health Check
+All API requests require a JWT token (`Authorization: Bearer <token>`) except `/auth/login`, `/auth/signup`, and `/health`.
+
+### Sign in
 
 ```bash
-curl http://localhost:8080/health
+curl -X POST http://localhost:8081/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin"}'
 ```
 
-### Create Order
+### List orders
 
 ```bash
-curl -X POST http://localhost:8080/orders \
+curl http://localhost:8081/orders \
+  -H "Authorization: Bearer <token>"
+```
+
+### Create order
+
+```bash
+curl -X POST http://localhost:8081/orders \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
-    "customer_id": "cust-123",
+    "customer_id": "<customer_id>",
     "items": [
-      {
-        "product_id": "prod-1",
-        "product_name": "Wireless Mouse",
-        "quantity": 2,
-        "unit_price": 29.99
-      },
-      {
-        "product_id": "prod-2",
-        "product_name": "USB-C Cable",
-        "quantity": 1,
-        "unit_price": 12.50
-      }
+      {"product_id": "B08N5WRWNW", "product_name": "Echo Dot", "quantity": 1, "unit_price": 49.99}
     ]
   }'
 ```
 
-### Get Order by ID
+### Cancel order
 
 ```bash
-curl http://localhost:8080/orders/{order_id}
+curl -X POST http://localhost:8081/orders/{order_id}/cancel \
+  -H "Authorization: Bearer <token>"
 ```
 
-### List All Orders
-
-```bash
-curl http://localhost:8080/orders
-```
-
-### List Orders by Status
-
-```bash
-curl "http://localhost:8080/orders?status=PENDING"
-```
-
-Valid statuses: `PENDING`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `CANCELLED`
-
-### Update Order Status
-
-```bash
-curl -X PATCH http://localhost:8080/orders/{order_id}/status \
-  -H "Content-Type: application/json" \
-  -d '{"status": "SHIPPED"}'
-```
-
-Allowed transitions:
+Valid status transitions:
 
 | From | To |
 |------|----|
 | `PENDING` | `PROCESSING`, `CANCELLED` |
 | `PROCESSING` | `SHIPPED` |
 | `SHIPPED` | `DELIVERED` |
-
-Use the cancel endpoint (below) instead of PATCH for cancellation.
-
-### Cancel Order
-
-```bash
-curl -X POST http://localhost:8080/orders/{order_id}/cancel
-```
-
-Only works when order status is `PENDING`.
-
-## Background Worker
-
-On startup, a goroutine runs every 5 minutes (configurable via `STATUS_UPDATE_INTERVAL`) and moves all `PENDING` orders to `PROCESSING`. For local testing:
-
-```bash
-STATUS_UPDATE_INTERVAL=10s go run ./cmd/server
-```
-
-## Design Notes
-
-- **In-memory storage** — thread-safe map with `sync.RWMutex`; swap the repository interface for PostgreSQL/MySQL in production
-- **Layered architecture** — domain → repository → service → handler keeps business rules testable
-- **Status validation** — enforced in the domain layer with explicit transition rules
-- **Graceful shutdown** — SIGINT/SIGTERM stops the worker and HTTP server cleanly
-
-## AI-Assisted Development
-
-This project was built with Cursor AI assistance for:
-
-- Scaffolding the layered Go project structure
-- Defining status transition rules and validation
-- Writing HTTP handlers with Go 1.22+ method-based routing
-- Creating unit and integration tests
-- Documenting the API and setup instructions
-
-Issues encountered and resolved during development:
-
-1. **Status transition edge cases** — ensured cancellation is only via the dedicated cancel endpoint, not PATCH, to avoid ambiguous API behavior
-2. **Thread safety** — repository returns cloned orders to prevent accidental mutation of stored state
-3. **Empty list responses** — list endpoint returns `[]` instead of `null` for better client compatibility
-# order_processing_assignment
